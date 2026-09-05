@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>습관 트래커</title>
+<title>프로젝트 JS</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#FAF9F5">
 <link rel="icon" href="icon-192.png" type="image/png">
@@ -38,25 +38,42 @@
     overflow:hidden;
   }
 
-  /* ===== 상태표시줄 (날짜 / 몸무게·자산 / 통계버튼) ===== */
+  /* ===== 통계 버튼 (화면 슬라이드와 무관하게 항상 같은 자리에 고정) ===== */
+  .stats-btn{
+    position:absolute;
+    top:18px;
+    right:20px;
+    width:28px; height:28px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:var(--paper);
+    display:flex; align-items:center; justify-content:center;
+    font-size:14px;
+    cursor:pointer;
+    z-index:6;
+  }
+  .stats-btn:active{background:var(--paper-dim);}
+
+  /* ===== 페이지 슬라이드 (날짜별 화면 전체가 여기 안에 들어감) ===== */
+  .page-viewport{
+    overflow-x:hidden;
+    position:relative;
+  }
+  .page-slide{
+    touch-action:pan-y;
+  }
+
+  /* ===== 상태표시줄 (날짜 / 몸무게·자산) ===== */
   .statusbar{
     padding:18px 20px 14px;
     border-bottom:1px solid var(--line);
-    touch-action:pan-y;
     user-select:none;
-  }
-  .statusbar-top{
-    display:flex;
-    align-items:center;
-    gap:8px;
   }
   .statusbar-row{
     display:flex;
     justify-content:space-between;
     align-items:baseline;
-    flex:1;
-    min-width:0;
-    transition:transform .18s ease, opacity .18s ease;
+    padding-right:38px; /* 오른쪽 위 고정된 통계 버튼과 안 겹치게 */
   }
   .date-block{display:flex; flex-direction:column; gap:2px;}
   .date-main{font-size:15px; font-weight:600; letter-spacing:-.2px;}
@@ -76,18 +93,6 @@
   }
   .dot{width:4px; height:4px; border-radius:50%; background:var(--line);}
   .dot.active{background:var(--ink-soft);}
-
-  .stats-btn{
-    width:28px; height:28px;
-    flex-shrink:0;
-    border-radius:8px;
-    border:1px solid var(--line);
-    background:var(--paper);
-    display:flex; align-items:center; justify-content:center;
-    font-size:14px;
-    cursor:pointer;
-  }
-  .stats-btn:active{background:var(--paper-dim);}
 
   /* ===== 통계 오버레이 ===== */
   .stats-overlay{
@@ -163,10 +168,26 @@
   .stats-chart-wrap svg{ display:block; width:100%; height:100%; overflow:visible; }
   .chart-value-tag{ font-size:10px; font-weight:600; }
   .chart-axis-label{ font-size:9.5px; }
+  .chart-empty{
+    height:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    color:var(--ink-soft);
+    font-size:12px;
+    line-height:1.6;
+    padding:0 20px;
+  }
 
   /* ===== 섹션 공통 ===== */
   .section{padding:10px 20px 4px;}
   .habit-list{display:flex; flex-direction:column;}
+  .empty-hint{
+    padding:10px 2px;
+    font-size:12px;
+    color:var(--ink-soft);
+  }
   .habit-row{
     display:flex;
     align-items:center;
@@ -318,45 +339,50 @@
 
 <div class="device">
 
-  <!-- 상태표시줄: 날짜 / 몸무게·자산 / 통계 버튼, 좌우 스와이프로 날짜 이동 -->
-  <div class="statusbar" id="statusbar">
-    <div class="statusbar-top">
-      <div class="statusbar-row" id="statusbarRow">
-        <div class="date-block">
-          <div class="date-main" id="dateMain">-</div>
-          <div class="date-sub" id="dateSub">-</div>
+  <div class="stats-btn" id="statsBtn">📊</div>
+
+  <!-- 날짜별로 화면 전체가 슬라이드되는 영역 -->
+  <div class="page-viewport">
+    <div class="page-slide" id="pageSlide">
+
+      <div class="statusbar" id="statusbar">
+        <div class="statusbar-row">
+          <div class="date-block">
+            <div class="date-main" id="dateMain">-</div>
+            <div class="date-sub" id="dateSub">-</div>
+          </div>
+          <div class="stat-block">
+            <div class="stat-value" id="statWeight">👙 —</div>
+            <div class="stat-value" id="statAsset">💎 —</div>
+          </div>
         </div>
-        <div class="stat-block">
-          <div class="stat-value" id="statWeight">👙 —</div>
-          <div class="stat-value" id="statAsset">💎 —</div>
+        <div class="swipe-hint">
+          <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+          <div class="dot active"></div>
+          <div class="dot"></div><div class="dot"></div><div class="dot"></div>
         </div>
       </div>
-      <div class="stats-btn" id="statsBtn">📊</div>
+
+      <!-- 하지 말아야 할 습관 -->
+      <div class="section">
+        <div class="habit-list" id="avoidList"></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- 능동적으로 실천하는 습관 -->
+      <div class="section">
+        <div class="habit-list" id="activeList"></div>
+      </div>
+
+      <div class="add-habit-btn" id="addHabitBtn"><span class="plus">+</span>습관 추가</div>
+
+      <div class="footnote">
+        화면을 좌우로 스와이프하면 이전/이후 날짜 전체 화면으로 이동합니다 (그날의 습관도 그대로 체크 가능).<br>
+        체크박스를 탭할 때마다 상태가 순환하고, 습관 텍스트를 짧게 탭하면 삭제, 길게 눌러 움직이면 순서가 바뀝니다.
+      </div>
+
     </div>
-    <div class="swipe-hint">
-      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
-      <div class="dot active"></div>
-      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
-    </div>
-  </div>
-
-  <!-- 하지 말아야 할 습관 (기본 체크, 탭하면 세모 → 엑스 → 다시 체크) -->
-  <div class="section">
-    <div class="habit-list" id="avoidList"></div>
-  </div>
-
-  <div class="divider"></div>
-
-  <!-- 능동적으로 실천하는 습관 (기본 미체크, 탭하면 체크 → 세모 → 엑스) -->
-  <div class="section">
-    <div class="habit-list" id="activeList"></div>
-  </div>
-
-  <div class="add-habit-btn" id="addHabitBtn"><span class="plus">+</span>습관 추가</div>
-
-  <div class="footnote">
-    상태표시줄을 좌우로 스와이프하면 이전/이후 날짜 기록으로 이동합니다.<br>
-    체크박스를 탭할 때마다 상태가 순환하고, 습관 텍스트를 짧게 탭하면 삭제, 길게 눌러 움직이면 순서가 바뀝니다.
   </div>
 
   <!-- 습관 추가 모달 -->
@@ -435,23 +461,9 @@ function subLabel(offset){
 
 // ==================================================================
 // 데이터 저장 (localStorage) — 이 폰 브라우저에만 저장됨
+// 처음 실행 시 예시 습관 없이 완전히 빈 목록에서 시작합니다.
 // ==================================================================
 const STORAGE_KEY = "habitTrackerV1";
-
-const DEFAULT_HABITS = {
-  avoid: [
-    { id:"avoid_shorts", emoji:"📱", text:"쇼츠·SNS 스크롤" },
-    { id:"avoid_snack",  emoji:"🌙", text:"야식" },
-    { id:"avoid_excuse", emoji:"😤", text:"핑계로 훈련 건너뛰기" },
-  ],
-  active: [
-    { id:"active_run",  emoji:"🏃",  text:"새벽 러닝 3km" },
-    { id:"active_read", emoji:"📖",  text:"독서 노트" },
-    { id:"active_jp",   emoji:"🇯🇵", text:"일본어 학습 1시간" },
-    { id:"active_yoga", emoji:"🧘",  text:"인요가 30분" },
-    { id:"active_blog", emoji:"✍️", text:"블로그 포스팅" },
-  ]
-};
 
 function loadStore(){
   let s = null;
@@ -462,14 +474,7 @@ function loadStore(){
   if(!s) s = {};
   if(!s.days) s.days = {};
   if(!s.streaks) s.streaks = {};
-  if(!s.habits){
-    const today = dateKey(dateForOffset(0));
-    s.habits = {
-      avoid:  DEFAULT_HABITS.avoid.map(h => ({ ...h, createdAt: today })),
-      active: DEFAULT_HABITS.active.map(h => ({ ...h, createdAt: today })),
-    };
-  }
-  s.habits.active.forEach(h=>{ if(s.streaks[h.id] === undefined) s.streaks[h.id] = 0; });
+  if(!s.habits) s.habits = { avoid: [], active: [] }; // 백지 상태로 시작
   return s;
 }
 function saveStore(){
@@ -564,7 +569,7 @@ function confirmAddHabit(){
   closeAddHabitModal();
 }
 
-// ---- 길게 눌러 순서 바꾸기 (드래그 리오더) ----
+// ---- 길게 눌러 순서 바꾸기 / 짧게 탭해서 삭제 ----
 let dragCtx = null;
 
 function attachRowDrag(row, index, category, habit){
@@ -661,6 +666,16 @@ function renderList(category){
   const el = document.getElementById(containerId);
   el.innerHTML = "";
 
+  if(habitDefs.length === 0){
+    const hint = document.createElement("div");
+    hint.className = "empty-hint";
+    hint.textContent = category === "avoid"
+      ? "아직 등록된 습관이 없어요. 아래 '+ 습관 추가'에서 만들어보세요."
+      : "아직 등록된 습관이 없어요. 아래 '+ 습관 추가'에서 만들어보세요.";
+    el.appendChild(hint);
+    return;
+  }
+
   habitDefs.forEach((h, idx)=>{
     const state = record[category][h.id] !== undefined ? record[category][h.id] : (category==="avoid" ? "check" : "none");
     const streak = category === "avoid" ? computeAvoidStreak(h) : (store.streaks[h.id] || 0);
@@ -733,7 +748,7 @@ document.getElementById("addHabitBtn").addEventListener("click", openAddHabitMod
 document.getElementById("cancelAddHabit").addEventListener("click", closeAddHabitModal);
 document.getElementById("confirmAddHabit").addEventListener("click", confirmAddHabit);
 document.getElementById("addHabitBackdrop").addEventListener("click", e=>{
-  if(e.target.id === "addHabitBackdrop") closeAddHabitModal(); // 바깥 영역 탭하면 닫기
+  if(e.target.id === "addHabitBackdrop") closeAddHabitModal();
 });
 document.querySelectorAll("#categorySegment .segment-btn").forEach(btn=>{
   btn.addEventListener("click", ()=>{
@@ -745,96 +760,195 @@ document.querySelectorAll("#categorySegment .segment-btn").forEach(btn=>{
 
 renderAll();
 
-// ---- 스와이프 제스처 (좌우로 날짜 이동, 마우스 드래그도 지원) ----
-const bar = document.getElementById("statusbar");
-const row = document.getElementById("statusbarRow");
-let startX = 0, startY = 0, dragging = false;
+// ==================================================================
+// 화면 전체 스와이프 (페이지 넘기듯 이전/다음 날짜로 전환)
+// ==================================================================
+const pageSlide = document.getElementById("pageSlide");
+let swipeStartX = 0, swipeStartY = 0, swipeActive = false, swipeDeciding = false, swipeDir = null;
 
-bar.addEventListener("pointerdown", e=>{
+function transitionDay(deltaOffset){ // +1: 과거로, -1: 최신으로
+  const width = pageSlide.getBoundingClientRect().width || 320;
+  const exitX = deltaOffset > 0 ? width : -width;
+  const enterX = deltaOffset > 0 ? -width : width;
+
+  pageSlide.style.transition = "transform .18s ease";
+  pageSlide.style.transform = `translateX(${exitX}px)`;
+
+  const onExitEnd = ()=>{
+    pageSlide.removeEventListener("transitionend", onExitEnd);
+    offsetFromToday += deltaOffset;
+    renderAll();
+    pageSlide.style.transition = "none";
+    pageSlide.style.transform = `translateX(${enterX}px)`;
+    void pageSlide.offsetWidth; // 강제 리플로우
+    pageSlide.style.transition = "transform .18s ease";
+    pageSlide.style.transform = "translateX(0px)";
+  };
+  pageSlide.addEventListener("transitionend", onExitEnd, { once:true });
+}
+function snapBack(){
+  pageSlide.style.transition = "transform .18s ease";
+  pageSlide.style.transform = "translateX(0px)";
+}
+
+pageSlide.addEventListener("pointerdown", e=>{
   if(e.pointerType === "mouse" && e.button !== 0) return;
-  startX = e.clientX;
-  startY = e.clientY;
-  dragging = true;
+  swipeStartX = e.clientX;
+  swipeStartY = e.clientY;
+  swipeActive = true;
+  swipeDeciding = true;
+  swipeDir = null;
 });
 
-bar.addEventListener("pointermove", e=>{
-  if(!dragging) return;
-  const dx = e.clientX - startX;
-  const dy = e.clientY - startY;
-  if(Math.abs(dx) > Math.abs(dy)){
-    row.style.transform = `translateX(${dx*0.4}px)`;
-    row.style.opacity = 1 - Math.min(Math.abs(dx)/300, 0.5);
+pageSlide.addEventListener("pointermove", e=>{
+  if(!swipeActive) return;
+  const dx = e.clientX - swipeStartX;
+  const dy = e.clientY - swipeStartY;
+
+  if(swipeDeciding){
+    if(Math.abs(dx) < 10 && Math.abs(dy) < 10) return; // 방향 아직 판단 중
+    swipeDeciding = false;
+    swipeDir = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
+  }
+  if(swipeDir !== "h") return; // 세로 움직임(습관 순서 변경 등)은 그대로 두고 관여하지 않음
+
+  e.preventDefault();
+  pageSlide.style.transition = "none";
+  pageSlide.style.transform = `translateX(${dx}px)`;
+}, { passive:false });
+
+pageSlide.addEventListener("pointerup", e=>{
+  if(!swipeActive) return;
+  swipeActive = false;
+  if(swipeDir !== "h"){ swipeDir = null; return; }
+  const dx = e.clientX - swipeStartX;
+  swipeDir = null;
+
+  if(dx > 60 && offsetFromToday < MAX_OFFSET){
+    transitionDay(1);   // 오른쪽으로 스와이프 → 이전(과거) 날짜
+  } else if(dx < -60 && offsetFromToday > 0){
+    transitionDay(-1);  // 왼쪽으로 스와이프 → 다음(최신) 날짜
+  } else {
+    snapBack();
   }
 });
-
-bar.addEventListener("pointerup", e=>{
-  if(!dragging) return;
-  dragging = false;
-  const dx = e.clientX - startX;
-  row.style.transform = "";
-  row.style.opacity = "";
-  if(dx > 60 && offsetFromToday < MAX_OFFSET){       // 오른쪽으로 스와이프 → 이전(과거) 날짜
-    offsetFromToday += 1;
-    renderAll();
-  } else if(dx < -60 && offsetFromToday > 0){        // 왼쪽으로 스와이프 → 다음(최신) 날짜
-    offsetFromToday -= 1;
-    renderAll();
-  }
-});
-bar.addEventListener("pointercancel", ()=>{
-  dragging = false;
-  row.style.transform = "";
-  row.style.opacity = "";
+pageSlide.addEventListener("pointercancel", ()=>{
+  swipeActive = false;
+  swipeDir = null;
+  snapBack();
 });
 
-// ---- 통계 화면 (외부 라이브러리 없이 순수 SVG로 직접 그림) --------
-
-// 예시 추이 데이터 (디자인 목업용 임의 값 — 실제 기록 연동은 추후 단계)
-const statsData = {
-  daily: {
-    labels:["8/30","8/31","9/1","9/2","9/3","9/4","9/5"],
-    weight:[65.4,65.2,65.1,65.0,65.1,64.8,64.6],
-    asset:[210,222,218,231,239,244,256]
-  },
-  weekly: {
-    labels:["7주전","6주전","5주전","4주전","3주전","2주전","1주전"],
-    weight:[67.8,67.1,66.6,66.2,65.7,65.3,64.9],
-    asset:[150,168,180,197,215,233,251]
-  },
-  monthly: {
-    labels:["3월","4월","5월","6월","7월","8월","9월"],
-    weight:[71.5,70.2,69.0,67.8,66.9,65.6,64.6],
-    asset:[60,95,120,150,190,225,256]
-  }
-};
-
+// ==================================================================
+// 통계 화면 (외부 라이브러리 없이 순수 SVG, 실제 기록 기반)
+// ==================================================================
 let currentRange = "daily";
 
-function toPoints(values, w, h, padL, padR, padT, padB){
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = (max - min) || 1;
-  const innerW = w - padL - padR;
-  const innerH = h - padT - padB;
-  return values.map((v, i)=>{
-    const x = padL + (values.length === 1 ? innerW/2 : innerW * i/(values.length-1));
-    const y = padT + innerH * (1 - (v - min)/span);
+function parseAssetNumber(v){
+  if(v == null) return null;
+  const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ""));
+  return isNaN(n) ? null : n;
+}
+
+function collectDailySeries(){
+  const labels=[], weight=[], asset=[];
+  for(let i=6;i>=0;i--){
+    const d = dateForOffset(i);
+    const rec = store.days[dateKey(d)];
+    labels.push(`${d.getMonth()+1}/${d.getDate()}`);
+    weight.push(rec && rec.weight != null ? rec.weight : null);
+    asset.push(rec && rec.asset != null ? parseAssetNumber(rec.asset) : null);
+  }
+  return { labels, weight, asset };
+}
+function collectWeeklySeries(){
+  const labels=[], weight=[], asset=[];
+  for(let w=6; w>=0; w--){
+    let bestRec = null;
+    for(let o=w*7; o<=w*7+6; o++){
+      const rec = store.days[dateKey(dateForOffset(o))];
+      if(rec){ bestRec = rec; break; } // offset 오름차순 = 최신부터 탐색
+    }
+    labels.push(w===0 ? "이번주" : `${w}주전`);
+    weight.push(bestRec && bestRec.weight != null ? bestRec.weight : null);
+    asset.push(bestRec && bestRec.asset != null ? parseAssetNumber(bestRec.asset) : null);
+  }
+  return { labels, weight, asset };
+}
+function collectMonthlySeries(){
+  const labels=[], weight=[], asset=[];
+  const today = dateForOffset(0);
+  const keys = Object.keys(store.days);
+  for(let m=6; m>=0; m--){
+    const target = new Date(today.getFullYear(), today.getMonth()-m, 1);
+    const ym = `${target.getFullYear()}-${pad2(target.getMonth()+1)}`;
+    let bestDay=-1, bestRec=null;
+    keys.forEach(key=>{
+      if(key.startsWith(ym+"-")){
+        const day = parseInt(key.split("-")[2], 10);
+        if(day > bestDay){ bestDay = day; bestRec = store.days[key]; }
+      }
+    });
+    labels.push(`${target.getMonth()+1}월`);
+    weight.push(bestRec && bestRec.weight != null ? bestRec.weight : null);
+    asset.push(bestRec && bestRec.asset != null ? parseAssetNumber(bestRec.asset) : null);
+  }
+  return { labels, weight, asset };
+}
+
+function toSparsePoints(values, w, h, padL, padR, padT, padB){
+  const nonNull = values.filter(v=>v!=null);
+  if(nonNull.length===0) return null;
+  const min = Math.min(...nonNull);
+  const max = Math.max(...nonNull);
+  const span = (max-min) || 1;
+  const innerW = w-padL-padR;
+  const innerH = h-padT-padB;
+  return values.map((v,i)=>{
+    const x = padL + (values.length===1 ? innerW/2 : innerW*i/(values.length-1));
+    if(v==null) return null;
+    const y = padT + innerH*(1-(v-min)/span);
     return { x, y, v };
   });
 }
-function pointsToPath(points){
-  return points.map((p,i)=> (i===0 ? "M" : "L") + p.x.toFixed(1) + "," + p.y.toFixed(1)).join(" ");
+function pathFromSparsePoints(points){
+  let d = "", started = false;
+  points.forEach(p=>{
+    if(p == null){ started = false; return; }
+    d += (started ? "L" : "M") + p.x.toFixed(1) + "," + p.y.toFixed(1) + " ";
+    started = true;
+  });
+  return d.trim();
+}
+function seriesMarkup(points, color, unit, decimals){
+  if(!points) return "";
+  const nonNull = points.filter(p=>p);
+  if(nonNull.length===0) return "";
+  const path = pathFromSparsePoints(points);
+  const dots = nonNull.map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.5" fill="${color}"/>`).join("");
+  const first = nonNull[0], last = nonNull[nonNull.length-1];
+  const firstLabel = `<text class="chart-value-tag" x="${first.x}" y="${first.y-8}" text-anchor="start" fill="${color}">${first.v.toFixed(decimals)}${unit}</text>`;
+  const lastLabel = (last !== first)
+    ? `<text class="chart-value-tag" x="${last.x}" y="${last.y-8}" text-anchor="end" fill="${color}">${last.v.toFixed(decimals)}${unit}</text>`
+    : "";
+  return `<path d="${path}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>${dots}${firstLabel}${lastLabel}`;
 }
 
 function renderChart(range){
-  const d = statsData[range];
+  const d = range==="daily" ? collectDailySeries() : range==="weekly" ? collectWeeklySeries() : collectMonthlySeries();
   const wrap = document.getElementById("statsChartWrap");
+  const hasAnyData = d.weight.some(v=>v!=null) || d.asset.some(v=>v!=null);
+
+  if(!hasAnyData){
+    wrap.innerHTML = `<div class="chart-empty">아직 쌓인 기록이 없어요.<br>몸무게·자산을 며칠 기록하면<br>여기에 추이 그래프가 나타나요.</div>`;
+    return;
+  }
+
   const w = wrap.clientWidth || 320;
   const h = wrap.clientHeight || 250;
   const padL = 6, padR = 6, padT = 26, padB = 26;
 
-  const weightPts = toPoints(d.weight, w, h, padL, padR, padT, padB);
-  const assetPts  = toPoints(d.asset,  w, h, padL, padR, padT, padB);
+  const weightPts = toSparsePoints(d.weight, w, h, padL, padR, padT, padB);
+  const assetPts  = toSparsePoints(d.asset,  w, h, padL, padR, padT, padB);
 
   const rootStyle = getComputedStyle(document.documentElement);
   const sage  = rootStyle.getPropertyValue("--sage").trim();
@@ -846,18 +960,10 @@ function renderChart(range){
   const gridLines = gridY.map(y=>`<line x1="${padL}" y1="${y}" x2="${w-padR}" y2="${y}" stroke="${line}" stroke-width="1"/>`).join("");
 
   const xLabels = d.labels.map((lab, i)=>{
-    const x = weightPts[i].x;
+    const innerW = w-padL-padR;
+    const x = padL + (d.labels.length===1 ? innerW/2 : innerW*i/(d.labels.length-1));
     return `<text class="chart-axis-label" x="${x}" y="${h-6}" text-anchor="middle" fill="${inkSoft}">${lab}</text>`;
   }).join("");
-
-  function seriesMarkup(points, color, unit, decimals){
-    const path = pointsToPath(points);
-    const dots = points.map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.5" fill="${color}"/>`).join("");
-    const first = points[0], last = points[points.length-1];
-    const firstLabel = `<text class="chart-value-tag" x="${first.x}" y="${first.y-8}" text-anchor="start" fill="${color}">${first.v.toFixed(decimals)}${unit}</text>`;
-    const lastLabel  = `<text class="chart-value-tag" x="${last.x}" y="${last.y-8}" text-anchor="end" fill="${color}">${last.v.toFixed(decimals)}${unit}</text>`;
-    return `<path d="${path}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>${dots}${firstLabel}${lastLabel}`;
-  }
 
   const svg = `
     <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
@@ -886,17 +992,15 @@ document.getElementById("statsBtn").addEventListener("click", ()=>{
 document.getElementById("statsBack").addEventListener("click", ()=>{
   document.getElementById("statsOverlay").classList.remove("open");
 });
-</script>
 
-<script>
-  // PWA: 오프라인에서도 열리도록 서비스워커 등록
-  if("serviceWorker" in navigator){
-    window.addEventListener("load", ()=>{
-      navigator.serviceWorker.register("sw.js").catch(err=>{
-        console.error("서비스워커 등록 실패", err);
-      });
+// PWA: 오프라인에서도 열리도록 서비스워커 등록
+if("serviceWorker" in navigator){
+  window.addEventListener("load", ()=>{
+    navigator.serviceWorker.register("sw.js").catch(err=>{
+      console.error("서비스워커 등록 실패", err);
     });
-  }
+  });
+}
 </script>
 
 </body>

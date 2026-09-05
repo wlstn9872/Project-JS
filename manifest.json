@@ -1,6 +1,6 @@
 {
-  "name": "습관 트래커",
-  "short_name": "습관트래커",
+  "name": "프로젝트 JS",
+  "short_name": "프로젝트JS",
   "description": "몸무게·자산·습관을 매일 기록하는 개인용 트래커",
   "start_url": "./index.html",
   "scope": "./",
