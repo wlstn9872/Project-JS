@@ -39,18 +39,39 @@
   }
 
   /* ===== 통계 버튼 (화면 슬라이드와 무관하게 항상 같은 자리에 고정) ===== */
+  .app-header{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:14px 16px 8px;
+  }
+  .catchphrase{
+    flex:1;
+    text-align:center;
+    font-size:12.5px;
+    font-weight:600;
+    color:var(--ink-soft);
+    letter-spacing:.2px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    cursor:pointer;
+    padding:5px 6px;
+    border-radius:6px;
+  }
+  .catchphrase:active{ background:var(--paper-dim); }
+
+  .header-spacer{ width:28px; flex-shrink:0; }
+
   .stats-btn{
-    position:absolute;
-    top:18px;
-    right:20px;
     width:28px; height:28px;
+    flex-shrink:0;
     border-radius:8px;
     border:1px solid var(--line);
     background:var(--paper);
     display:flex; align-items:center; justify-content:center;
     font-size:14px;
     cursor:pointer;
-    z-index:6;
   }
   .stats-btn:active{background:var(--paper-dim);}
 
@@ -73,7 +94,6 @@
     display:flex;
     justify-content:space-between;
     align-items:baseline;
-    padding-right:38px; /* 오른쪽 위 고정된 통계 버튼과 안 겹치게 */
   }
   .date-block{display:flex; flex-direction:column; gap:2px;}
   .date-main{font-size:15px; font-weight:600; letter-spacing:-.2px;}
@@ -341,7 +361,11 @@
 
 <div class="device">
 
-  <div class="stats-btn" id="statsBtn">📊</div>
+  <div class="app-header">
+    <div class="header-spacer"></div>
+    <div class="catchphrase" id="catchphrase">문구를 입력해보세요</div>
+    <div class="stats-btn" id="statsBtn">📊</div>
+  </div>
 
   <!-- 날짜별로 화면 전체가 슬라이드되는 영역 -->
   <div class="page-viewport">
@@ -640,42 +664,8 @@ function confirmAddHabit(){
   closeAddHabitModal();
 }
 
-// ---- 길게 눌러 순서 바꾸기 / 짧게 탭해서 삭제 ----
-let dragCtx = null;
-
-function attachRowDrag(row, index, category, habit){
-  let pressTimer = null;
-  let startX = 0, startY = 0;
-  row.addEventListener("pointerdown", e=>{
-    if(e.target.closest(".checkbox")) return;
-    if(e.pointerType === "mouse" && e.button !== 0) return;
-    startX = e.clientX;
-    startY = e.clientY;
-    pressTimer = setTimeout(()=>{
-      pressTimer = null;
-      beginDrag(category, index, startY);
-    }, 420);
-  });
-  row.addEventListener("pointermove", e=>{
-    if(!pressTimer) return;
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-    if(Math.abs(dx) > 8 || Math.abs(dy) > 8){ // 손떨림 정도는 무시하고, 실제로 움직였을 때만 롱프레스 취소
-      clearTimeout(pressTimer);
-      pressTimer = null;
-    }
-  });
-  row.addEventListener("pointerup", e=>{
-    if(pressTimer){                 // 420ms 안에 손을 뗌 = 드래그 시작 전 짧은 탭 → 삭제
-      clearTimeout(pressTimer);
-      pressTimer = null;
-      if(!e.target.closest(".checkbox")) openEditHabitModal(category, habit);
-    }
-  });
-  row.addEventListener("pointercancel", ()=>{
-    if(pressTimer){ clearTimeout(pressTimer); pressTimer = null; }
-  });
-}
+// ---- 습관 삭제 / 목록 DOM 조회 ----
+function listElFor(category){ return document.getElementById(category==="avoid" ? "avoidList" : "activeList"); }
 
 function deleteHabit(category, habit){
   const ok = confirm(`'${habit.text}' 습관을 삭제할까요?`);
@@ -686,61 +676,6 @@ function deleteHabit(category, habit){
   delete store.streaks[habit.id];
   saveStore();
   renderList(category);
-}
-
-function listElFor(category){ return document.getElementById(category==="avoid" ? "avoidList" : "activeList"); }
-
-function beginDrag(category, index, startY){
-  const rows = Array.from(listElFor(category).children);
-  if(!rows.length) return;
-  dragCtx = { category, index, startY, rows, rowHeight: rows[0].offsetHeight || 40 };
-  rows[index].classList.add("dragging");
-  document.addEventListener("pointermove", onDragMove, {passive:false});
-  document.addEventListener("pointerup", onDragEnd);
-  document.addEventListener("pointercancel", onDragEnd);
-}
-
-function onDragMove(e){
-  if(!dragCtx) return;
-  e.preventDefault();
-  const deltaY = e.clientY - dragCtx.startY;
-  const draggedRow = dragCtx.rows[dragCtx.index];
-  if(draggedRow) draggedRow.style.transform = `translateY(${deltaY}px)`;
-
-  const arr = store.habits[dragCtx.category];
-  const shift = Math.round(deltaY / dragCtx.rowHeight);
-  const newIndex = Math.max(0, Math.min(arr.length - 1, dragCtx.index + shift));
-
-  if(newIndex !== dragCtx.index){
-    // 데이터 순서 변경
-    const [moved] = arr.splice(dragCtx.index, 1);
-    arr.splice(newIndex, 0, moved);
-
-    // 화면도 데이터 순서에 맞춰 옮기되, 드래그 중인 DOM 요소 자체는 다시 만들지 않고
-    // 위치(자리)만 이동시킨다 — 요소를 재생성하면 포인터 캡처가 끊겨 드래그가 멈춘다.
-    const rowsArr = dragCtx.rows;
-    const [movedRow] = rowsArr.splice(dragCtx.index, 1);
-    rowsArr.splice(newIndex, 0, movedRow);
-    const listEl = listElFor(dragCtx.category);
-    rowsArr.forEach((r, i)=>{
-      if(listEl.children[i] !== r) listEl.insertBefore(r, listEl.children[i] || null);
-    });
-
-    dragCtx.index = newIndex;
-    dragCtx.startY = e.clientY;
-    draggedRow.style.transform = "translateY(0px)"; // 자리가 이동했으니 기준점 초기화
-  }
-}
-
-function onDragEnd(){
-  if(!dragCtx) return;
-  const category = dragCtx.category;
-  document.removeEventListener("pointermove", onDragMove);
-  document.removeEventListener("pointerup", onDragEnd);
-  document.removeEventListener("pointercancel", onDragEnd);
-  dragCtx = null;
-  saveStore();
-  renderList(category); // 드래그가 끝난 뒤에만 깔끔하게 다시 그려서 인덱스/스타일 정리
 }
 
 // ---- 렌더링 ----
@@ -787,7 +722,7 @@ function renderList(category){
       saveStore();
       renderList(category);
     });
-    attachRowDrag(row, idx, category, h);
+    row._habitMeta = { category, habit: h };
     el.appendChild(row);
   });
 }
@@ -865,13 +800,32 @@ document.querySelectorAll("#categorySegment .segment-btn").forEach(btn=>{
   });
 });
 
+// 상단 캐치프레이즈: 탭해서 자유롭게 수정 (날짜와 무관하게 하나만 저장됨)
+const DEFAULT_CATCHPHRASE = "Don't be average.";
+function renderCatchphrase(){
+  document.getElementById("catchphrase").textContent = store.catchphrase || DEFAULT_CATCHPHRASE;
+}
+document.getElementById("catchphrase").addEventListener("click", ()=>{
+  const input = prompt("캐치프레이즈", store.catchphrase || DEFAULT_CATCHPHRASE);
+  if(input === null) return;
+  store.catchphrase = input.trim();
+  saveStore();
+  renderCatchphrase();
+});
+renderCatchphrase();
+
 renderAll();
 
 // ==================================================================
 // 화면 전체 스와이프 (페이지 넘기듯 이전/다음 날짜로 전환)
 // ==================================================================
+// ==================================================================
+// 화면 제스처 통합 처리
+// 좌우 스와이프(날짜 이동) / 롱프레스+드래그(순서 변경) / 짧은 탭(수정)을
+// 한 곳에서 판단해서 서로 충돌하지 않게 합니다.
+// ==================================================================
 const pageSlide = document.getElementById("pageSlide");
-let swipeStartX = 0, swipeStartY = 0, swipeActive = false, swipeDeciding = false, swipeDir = null;
+let gesture = null;
 
 function transitionDay(deltaOffset){ // +1: 과거로, -1: 최신으로
   const width = pageSlide.getBoundingClientRect().width || 320;
@@ -898,51 +852,124 @@ function snapBack(){
   pageSlide.style.transform = "translateX(0px)";
 }
 
+function startRowDrag(rowEl, startY){
+  const meta = rowEl._habitMeta;
+  if(!meta) return null;
+  const category = meta.category;
+  const arr = store.habits[category];
+  const index = arr.findIndex(h => h.id === meta.habit.id);
+  if(index === -1) return null;
+  const rows = Array.from(listElFor(category).children);
+  rowEl.classList.add("dragging");
+  return { category, index, rows, rowHeight: rows[0] ? rows[0].offsetHeight : 40, startY };
+}
+
+function handleRowDragMove(ctx, e){
+  const deltaY = e.clientY - ctx.startY;
+  const draggedRow = ctx.rows[ctx.index];
+  if(draggedRow) draggedRow.style.transform = `translateY(${deltaY}px)`;
+
+  const arr = store.habits[ctx.category];
+  const shift = Math.round(deltaY / ctx.rowHeight);
+  const newIndex = Math.max(0, Math.min(arr.length - 1, ctx.index + shift));
+
+  if(newIndex !== ctx.index){
+    const [moved] = arr.splice(ctx.index, 1);
+    arr.splice(newIndex, 0, moved);
+
+    // 드래그 중인 DOM 요소는 다시 만들지 않고 자리만 옮긴다 (재생성하면 포인터 이벤트가 끊김)
+    const rowsArr = ctx.rows;
+    const [movedRow] = rowsArr.splice(ctx.index, 1);
+    rowsArr.splice(newIndex, 0, movedRow);
+    const listEl = listElFor(ctx.category);
+    rowsArr.forEach((r, i)=>{
+      if(listEl.children[i] !== r) listEl.insertBefore(r, listEl.children[i] || null);
+    });
+
+    ctx.index = newIndex;
+    ctx.startY = e.clientY;
+    draggedRow.style.transform = "translateY(0px)";
+  }
+}
+
 pageSlide.addEventListener("pointerdown", e=>{
   if(e.pointerType === "mouse" && e.button !== 0) return;
-  swipeStartX = e.clientX;
-  swipeStartY = e.clientY;
-  swipeActive = true;
-  swipeDeciding = true;
-  swipeDir = null;
+  if(e.target.closest(".checkbox")) return; // 체크박스는 자체 클릭 이벤트로 처리, 여기선 관여하지 않음
+
+  const rowEl = e.target.closest(".habit-row");
+  gesture = {
+    rowEl,
+    startX: e.clientX,
+    startY: e.clientY,
+    decided: null,   // null -> "h"(가로 스와이프) | "v"(세로: 드래그 또는 무시)
+    longPressTimer: null,
+    dragCtx: null,
+  };
+
+  if(rowEl){
+    gesture.longPressTimer = setTimeout(()=>{
+      if(!gesture || gesture.rowEl !== rowEl) return;
+      gesture.longPressTimer = null;
+      gesture.decided = "v";
+      gesture.dragCtx = startRowDrag(rowEl, e.clientY);
+    }, 420);
+  }
 });
 
 pageSlide.addEventListener("pointermove", e=>{
-  if(!swipeActive) return;
-  const dx = e.clientX - swipeStartX;
-  const dy = e.clientY - swipeStartY;
+  if(!gesture) return;
+  const dx = e.clientX - gesture.startX;
+  const dy = e.clientY - gesture.startY;
 
-  if(swipeDeciding){
-    if(Math.abs(dx) < 10 && Math.abs(dy) < 10) return; // 방향 아직 판단 중
-    swipeDeciding = false;
-    swipeDir = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
+  if(gesture.decided === null){
+    if(Math.abs(dx) < 10 && Math.abs(dy) < 10) return; // 아직 방향 판단 전(롱프레스 대기는 유지)
+    gesture.decided = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
+    if(gesture.decided !== "h" && gesture.longPressTimer){
+      clearTimeout(gesture.longPressTimer); // 움직임이 커지면(=스크롤 의도) 대기 중이던 롱프레스는 취소
+      gesture.longPressTimer = null;
+    }
   }
-  if(swipeDir !== "h") return; // 세로 움직임(습관 순서 변경 등)은 그대로 두고 관여하지 않음
 
-  e.preventDefault();
-  pageSlide.style.transition = "none";
-  pageSlide.style.transform = `translateX(${dx}px)`;
+  if(gesture.decided === "h"){
+    e.preventDefault();
+    pageSlide.style.transition = "none";
+    pageSlide.style.transform = `translateX(${dx}px)`;
+  } else if(gesture.dragCtx){
+    e.preventDefault();
+    handleRowDragMove(gesture.dragCtx, e);
+  }
 }, { passive:false });
 
 pageSlide.addEventListener("pointerup", e=>{
-  if(!swipeActive) return;
-  swipeActive = false;
-  if(swipeDir !== "h"){ swipeDir = null; return; }
-  const dx = e.clientX - swipeStartX;
-  swipeDir = null;
+  if(!gesture) return;
+  if(gesture.longPressTimer) clearTimeout(gesture.longPressTimer);
 
-  if(dx > 60 && offsetFromToday < MAX_OFFSET){
-    transitionDay(1);   // 오른쪽으로 스와이프 → 이전(과거) 날짜
-  } else if(dx < -60 && offsetFromToday > 0){
-    transitionDay(-1);  // 왼쪽으로 스와이프 → 다음(최신) 날짜
-  } else {
+  if(gesture.decided === "h"){
+    const dx = e.clientX - gesture.startX;
+    if(dx > 60 && offsetFromToday < MAX_OFFSET) transitionDay(1);         // 오른쪽 → 이전(과거) 날짜
+    else if(dx < -60 && offsetFromToday > 0) transitionDay(-1);          // 왼쪽 → 다음(최신) 날짜
+    else snapBack();
+  } else if(gesture.dragCtx){
+    saveStore();
+    renderList(gesture.dragCtx.category); // 드래그가 끝난 뒤에만 깔끔하게 다시 그려서 정리
+  } else if(gesture.decided === null && gesture.rowEl){
+    // 방향이 정해지기 전(=거의 안 움직이고) 손을 뗌 → 짧은 탭 → 수정 모달
+    const meta = gesture.rowEl._habitMeta;
+    if(meta) openEditHabitModal(meta.category, meta.habit);
+  }
+  gesture = null;
+});
+
+pageSlide.addEventListener("pointercancel", ()=>{
+  if(!gesture) return;
+  if(gesture.longPressTimer) clearTimeout(gesture.longPressTimer);
+  if(gesture.dragCtx){
+    saveStore();
+    renderList(gesture.dragCtx.category);
+  } else if(gesture.decided === "h"){
     snapBack();
   }
-});
-pageSlide.addEventListener("pointercancel", ()=>{
-  swipeActive = false;
-  swipeDir = null;
-  snapBack();
+  gesture = null;
 });
 
 // ==================================================================
