@@ -198,6 +198,7 @@
     background:var(--paper);
     position:relative;
     transition:background .15s ease;
+    touch-action:none;
   }
   .habit-row:last-child{border-bottom:none;}
   .habit-row.dragging{
@@ -574,17 +575,25 @@ let dragCtx = null;
 
 function attachRowDrag(row, index, category, habit){
   let pressTimer = null;
+  let startX = 0, startY = 0;
   row.addEventListener("pointerdown", e=>{
     if(e.target.closest(".checkbox")) return;
     if(e.pointerType === "mouse" && e.button !== 0) return;
-    const startY = e.clientY;
+    startX = e.clientX;
+    startY = e.clientY;
     pressTimer = setTimeout(()=>{
       pressTimer = null;
       beginDrag(category, index, startY);
     }, 420);
   });
-  row.addEventListener("pointermove", ()=>{
-    if(pressTimer){ clearTimeout(pressTimer); pressTimer = null; }
+  row.addEventListener("pointermove", e=>{
+    if(!pressTimer) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    if(Math.abs(dx) > 8 || Math.abs(dy) > 8){ // 손떨림 정도는 무시하고, 실제로 움직였을 때만 롱프레스 취소
+      clearTimeout(pressTimer);
+      pressTimer = null;
+    }
   });
   row.addEventListener("pointerup", e=>{
     if(pressTimer){                 // 420ms 안에 손을 뗌 = 드래그 시작 전 짧은 탭 → 삭제
