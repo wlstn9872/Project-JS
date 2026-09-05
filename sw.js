@@ -1,4 +1,4 @@
-const CACHE_NAME = "habit-tracker-v1";
+const CACHE_NAME = "habit-tracker-v2";
 const ASSETS = [
   "./",
   "./index.html",
@@ -23,13 +23,18 @@ self.addEventListener("activate", (e) => {
   self.clients.claim();
 });
 
-// 오프라인에서도 열리도록: 캐시 우선, 없으면 네트워크, 그마저 실패하면 index.html로 대체
+// 네트워크 우선: 인터넷이 되면 항상 최신 파일을 받아오고,
+// 오프라인일 때만 저장해둔 캐시로 대체합니다. (개발 중 수정사항이 바로바로 반영되도록)
 self.addEventListener("fetch", (e) => {
   e.respondWith(
-    caches.match(e.request).then(
-      (cached) =>
-        cached ||
-        fetch(e.request).catch(() => caches.match("./index.html"))
-    )
+    fetch(e.request)
+      .then((res) => {
+        const resClone = res.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(e.request, resClone));
+        return res;
+      })
+      .catch(() =>
+        caches.match(e.request).then((cached) => cached || caches.match("./index.html"))
+      )
   );
 });
