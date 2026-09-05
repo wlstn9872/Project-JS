@@ -710,6 +710,20 @@ function renderAllLists(){
   renderList("active");
 }
 
+// 자산 표시할 때 천단위 콤마 자동으로 넣기 (예: +12000 -> +12,000)
+function formatAssetDisplay(raw){
+  if(raw == null) return "";
+  const str = String(raw).trim();
+  const m = str.match(/^([+-]?)([\d,]*\.?\d*)(.*)$/);
+  if(!m || m[2] === "") return str;
+  const sign = m[1];
+  const numPart = m[2].replace(/,/g, "");
+  const suffix = m[3];
+  const [intPart, decPart] = numPart.split(".");
+  const withCommas = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return sign + withCommas + (decPart !== undefined ? "." + decPart : "") + suffix;
+}
+
 function renderStatusbar(){
   const d = dateForOffset(offsetFromToday);
   const key = dateKey(d);
@@ -717,7 +731,7 @@ function renderStatusbar(){
   document.getElementById("dateMain").textContent = dateLabel(d);
   document.getElementById("dateSub").textContent = subLabel(offsetFromToday);
   document.getElementById("statWeight").textContent = record.weight !== null ? `👙 ${record.weight}kg` : "👙 —";
-  document.getElementById("statAsset").textContent = record.asset !== null ? `💎 ${record.asset}` : "💎 —";
+  document.getElementById("statAsset").textContent = record.asset !== null ? `💎 ${formatAssetDisplay(record.asset)}` : "💎 —";
 }
 
 function renderAll(){
