@@ -269,7 +269,7 @@
   .drag-handle{
     font-size:15px;
     color:var(--ink-soft);
-    padding:4px 4px 4px 6px;
+    padding:4px;
     cursor:grab;
     touch-action:none;
     flex-shrink:0;
@@ -417,7 +417,7 @@
 
       <div class="footnote">
         화면을 좌우로 스와이프하면 이전/이후 날짜 전체 화면으로 이동합니다 (그날의 습관도 그대로 체크 가능).<br>
-        체크박스를 탭할 때마다 상태가 순환하고, 습관 텍스트를 탭하면 수정·삭제 창이 뜨며, 오른쪽 끝 손잡이(⠿)를 눌러 움직이면 순서가 바뀝니다.
+        체크박스를 탭할 때마다 상태가 순환하고, 습관 텍스트를 탭하면 수정·삭제 창이 뜨며, 왼쪽 손잡이(⠿)를 눌러 움직이면 순서가 바뀝니다.
       </div>
 
     </div>
@@ -717,6 +717,7 @@ function renderList(category){
     const row = document.createElement("div");
     row.className = "habit-row";
     row.innerHTML = `
+      <div class="drag-handle">⠿</div>
       <div class="habit-label">
         <span class="habit-emoji">${h.emoji}</span>
         <span class="habit-text">${h.text}</span>
@@ -724,7 +725,6 @@ function renderList(category){
       <div class="habit-right">
         <span class="streak ${streak===0?'zero':''}"><span class="flame">🔥</span>${streak>0 ? streak+'일' : '-'}</span>
         <div class="checkbox ${state!=='none'?state:''}">${iconFor[state]}</div>
-        <div class="drag-handle">⠿</div>
       </div>
     `;
     row.querySelector(".checkbox").addEventListener("click", ()=>{
