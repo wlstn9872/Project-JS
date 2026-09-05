@@ -235,6 +235,7 @@
     font-size:13px;
     flex:1;
     min-width:0;
+    cursor:pointer;
   }
   .habit-emoji{font-size:15px; flex-shrink:0;}
   .habit-text{white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
@@ -264,6 +265,17 @@
   .checkbox.check{ background:var(--sage-bg); border-color:var(--sage); color:var(--sage); }
   .checkbox.warn{ background:var(--amber-bg); border-color:var(--amber); color:var(--amber); }
   .checkbox.fail{ background:var(--brick-bg); border-color:var(--brick); color:var(--brick); }
+
+  .drag-handle{
+    font-size:15px;
+    color:var(--ink-soft);
+    padding:4px 4px 4px 6px;
+    cursor:grab;
+    touch-action:none;
+    flex-shrink:0;
+    line-height:1;
+  }
+  .drag-handle:active{ color:var(--ink); }
 
   .add-habit-btn{
     margin-top:4px;
@@ -405,7 +417,7 @@
 
       <div class="footnote">
         화면을 좌우로 스와이프하면 이전/이후 날짜 전체 화면으로 이동합니다 (그날의 습관도 그대로 체크 가능).<br>
-        체크박스를 탭할 때마다 상태가 순환하고, 습관 텍스트를 짧게 탭하면 수정·삭제 창이 뜨고, 길게 눌러 움직이면 순서가 바뀝니다.
+        체크박스를 탭할 때마다 상태가 순환하고, 습관 텍스트를 탭하면 수정·삭제 창이 뜨며, 오른쪽 끝 손잡이(⠿)를 눌러 움직이면 순서가 바뀝니다.
       </div>
 
     </div>
@@ -712,6 +724,7 @@ function renderList(category){
       <div class="habit-right">
         <span class="streak ${streak===0?'zero':''}"><span class="flame">🔥</span>${streak>0 ? streak+'일' : '-'}</span>
         <div class="checkbox ${state!=='none'?state:''}">${iconFor[state]}</div>
+        <div class="drag-handle">⠿</div>
       </div>
     `;
     row.querySelector(".checkbox").addEventListener("click", ()=>{
@@ -722,6 +735,11 @@ function renderList(category){
       saveStore();
       renderList(category);
     });
+    // 습관 텍스트 영역을 탭하면 바로 수정창 (일반 클릭이라 스크롤/스와이프와 헷갈리지 않음)
+    row.querySelector(".habit-label").addEventListener("click", ()=>{
+      openEditHabitModal(category, h);
+    });
+    attachHandleDrag(row, row.querySelector(".drag-handle"), category, h);
     row._habitMeta = { category, habit: h };
     el.appendChild(row);
   });
@@ -820,12 +838,10 @@ renderAll();
 // 화면 전체 스와이프 (페이지 넘기듯 이전/다음 날짜로 전환)
 // ==================================================================
 // ==================================================================
-// 화면 제스처 통합 처리
-// 좌우 스와이프(날짜 이동) / 롱프레스+드래그(순서 변경) / 짧은 탭(수정)을
-// 한 곳에서 판단해서 서로 충돌하지 않게 합니다.
+// 화면 제스처: 좌우 스와이프(날짜 이동)와 순서변경 손잡이(⠿) 드래그를
+// 서로 겹치지 않는 별도 영역으로 완전히 분리했습니다.
 // ==================================================================
 const pageSlide = document.getElementById("pageSlide");
-let gesture = null;
 
 function transitionDay(deltaOffset){ // +1: 과거로, -1: 최신으로
   const width = pageSlide.getBoundingClientRect().width || 320;
@@ -852,18 +868,47 @@ function snapBack(){
   pageSlide.style.transform = "translateX(0px)";
 }
 
-function startRowDrag(rowEl, startY){
-  const meta = rowEl._habitMeta;
-  if(!meta) return null;
-  const category = meta.category;
-  const arr = store.habits[category];
-  const index = arr.findIndex(h => h.id === meta.habit.id);
-  if(index === -1) return null;
-  const rows = Array.from(listElFor(category).children);
-  rowEl.classList.add("dragging");
-  return { category, index, rows, rowHeight: rows[0] ? rows[0].offsetHeight : 40, startY };
-}
+// ---- 좌우 스와이프 (체크박스·손잡이 위에서 시작한 터치는 관여하지 않음) ----
+let swipe = null;
 
+pageSlide.addEventListener("pointerdown", e=>{
+  if(e.pointerType === "mouse" && e.button !== 0) return;
+  if(e.target.closest(".checkbox") || e.target.closest(".drag-handle")) return;
+  swipe = { startX: e.clientX, startY: e.clientY, decided: null };
+});
+
+pageSlide.addEventListener("pointermove", e=>{
+  if(!swipe) return;
+  const dx = e.clientX - swipe.startX;
+  const dy = e.clientY - swipe.startY;
+
+  if(swipe.decided === null){
+    if(Math.abs(dx) < 10 && Math.abs(dy) < 10) return; // 방향 아직 판단 전
+    swipe.decided = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
+  }
+  if(swipe.decided !== "h") return; // 세로 움직임은 페이지 스크롤에 맡기고 관여하지 않음
+
+  e.preventDefault();
+  pageSlide.style.transition = "none";
+  pageSlide.style.transform = `translateX(${dx}px)`;
+}, { passive:false });
+
+pageSlide.addEventListener("pointerup", e=>{
+  if(!swipe) return;
+  if(swipe.decided === "h"){
+    const dx = e.clientX - swipe.startX;
+    if(dx > 60 && offsetFromToday < MAX_OFFSET) transitionDay(1);   // 오른쪽 → 이전(과거) 날짜
+    else if(dx < -60 && offsetFromToday > 0) transitionDay(-1);     // 왼쪽 → 다음(최신) 날짜
+    else snapBack();
+  }
+  swipe = null;
+});
+pageSlide.addEventListener("pointercancel", ()=>{
+  if(swipe && swipe.decided === "h") snapBack();
+  swipe = null;
+});
+
+// ---- 순서변경 손잡이(⠿) 드래그: 누르는 즉시 시작, 타이밍 판단 없음 ----
 function handleRowDragMove(ctx, e){
   const deltaY = e.clientY - ctx.startY;
   const draggedRow = ctx.rows[ctx.index];
@@ -892,85 +937,31 @@ function handleRowDragMove(ctx, e){
   }
 }
 
-pageSlide.addEventListener("pointerdown", e=>{
-  if(e.pointerType === "mouse" && e.button !== 0) return;
-  if(e.target.closest(".checkbox")) return; // 체크박스는 자체 클릭 이벤트로 처리, 여기선 관여하지 않음
-
-  const rowEl = e.target.closest(".habit-row");
-  gesture = {
-    rowEl,
-    startX: e.clientX,
-    startY: e.clientY,
-    decided: null,   // null -> "h"(가로 스와이프) | "v"(세로: 드래그 또는 무시)
-    longPressTimer: null,
-    dragCtx: null,
-  };
-
-  if(rowEl){
-    gesture.longPressTimer = setTimeout(()=>{
-      if(!gesture || gesture.rowEl !== rowEl) return;
-      gesture.longPressTimer = null;
-      gesture.decided = "v";
-      gesture.dragCtx = startRowDrag(rowEl, e.clientY);
-    }, 420);
-  }
-});
-
-pageSlide.addEventListener("pointermove", e=>{
-  if(!gesture) return;
-  const dx = e.clientX - gesture.startX;
-  const dy = e.clientY - gesture.startY;
-
-  if(gesture.decided === null){
-    if(Math.abs(dx) < 10 && Math.abs(dy) < 10) return; // 아직 방향 판단 전(롱프레스 대기는 유지)
-    gesture.decided = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
-    if(gesture.decided !== "h" && gesture.longPressTimer){
-      clearTimeout(gesture.longPressTimer); // 움직임이 커지면(=스크롤 의도) 대기 중이던 롱프레스는 취소
-      gesture.longPressTimer = null;
-    }
-  }
-
-  if(gesture.decided === "h"){
+function attachHandleDrag(row, handle, category, habit){
+  handle.addEventListener("pointerdown", e=>{
+    if(e.pointerType === "mouse" && e.button !== 0) return;
     e.preventDefault();
-    pageSlide.style.transition = "none";
-    pageSlide.style.transform = `translateX(${dx}px)`;
-  } else if(gesture.dragCtx){
-    e.preventDefault();
-    handleRowDragMove(gesture.dragCtx, e);
-  }
-}, { passive:false });
+    const arr = store.habits[category];
+    const index = arr.findIndex(x => x.id === habit.id);
+    if(index === -1) return;
+    const rows = Array.from(listElFor(category).children);
+    row.classList.add("dragging");
+    const ctx = { category, index, rows, rowHeight: rows[0] ? rows[0].offsetHeight : 40, startY: e.clientY };
 
-pageSlide.addEventListener("pointerup", e=>{
-  if(!gesture) return;
-  if(gesture.longPressTimer) clearTimeout(gesture.longPressTimer);
+    const onMove = ev=>{ ev.preventDefault(); handleRowDragMove(ctx, ev); };
+    const cleanup = ()=>{
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      document.removeEventListener("pointercancel", onCancel);
+    };
+    const onUp = ()=>{ cleanup(); saveStore(); renderList(category); };
+    const onCancel = ()=>{ cleanup(); renderList(category); };
 
-  if(gesture.decided === "h"){
-    const dx = e.clientX - gesture.startX;
-    if(dx > 60 && offsetFromToday < MAX_OFFSET) transitionDay(1);         // 오른쪽 → 이전(과거) 날짜
-    else if(dx < -60 && offsetFromToday > 0) transitionDay(-1);          // 왼쪽 → 다음(최신) 날짜
-    else snapBack();
-  } else if(gesture.dragCtx){
-    saveStore();
-    renderList(gesture.dragCtx.category); // 드래그가 끝난 뒤에만 깔끔하게 다시 그려서 정리
-  } else if(gesture.decided === null && gesture.rowEl){
-    // 방향이 정해지기 전(=거의 안 움직이고) 손을 뗌 → 짧은 탭 → 수정 모달
-    const meta = gesture.rowEl._habitMeta;
-    if(meta) openEditHabitModal(meta.category, meta.habit);
-  }
-  gesture = null;
-});
-
-pageSlide.addEventListener("pointercancel", ()=>{
-  if(!gesture) return;
-  if(gesture.longPressTimer) clearTimeout(gesture.longPressTimer);
-  if(gesture.dragCtx){
-    saveStore();
-    renderList(gesture.dragCtx.category);
-  } else if(gesture.decided === "h"){
-    snapBack();
-  }
-  gesture = null;
-});
+    document.addEventListener("pointermove", onMove, { passive:false });
+    document.addEventListener("pointerup", onUp);
+    document.addEventListener("pointercancel", onCancel);
+  });
+}
 
 // ==================================================================
 // 통계 화면 (외부 라이브러리 없이 순수 SVG, 실제 기록 기반)
